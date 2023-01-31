@@ -15,4 +15,5 @@ require (
 	github.com/multiformats/go-multibase v0.0.3
 	github.com/sirupsen/logrus v1.6.0
 	github.com/spf13/cobra v1.0.0
+	golang.org/x/sys v0.4.0 // indirect
 )
