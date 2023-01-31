@@ -15,13 +15,14 @@ import (
 	mbase "github.com/multiformats/go-multibase"
 )
 
-// DockerizeHash does base58 to base32 conversion
-func DockerizeHash(base58Hash string) string {
+// DockerizeHash does CIDv0/CIDv1 to base32 multihash conversion
+func DockerizeHash(baseHash string) string {
 	re := regexp.MustCompile(`(/ipfs/)?(.*)`)
-	matches := re.FindStringSubmatch(base58Hash)
-	base58Hash = matches[len(matches)-1]
-	decodedB58 := base58.Decode(base58Hash)
-	b32str := base32.StdEncoding.EncodeToString(decodedB58)
+	matches := re.FindStringSubmatch(baseHash)
+	baseHash = matches[len(matches)-1]
+	decodedCid, _ := cid.Decode(baseHash)
+	decodedHash := []byte(decodedCid.Hash())
+	b32str := base32.StdEncoding.EncodeToString(decodedHash)
 
 	end := len(b32str)
 	if end > 0 {
