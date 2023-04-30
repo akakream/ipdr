@@ -21,6 +21,7 @@ import (
 	docker "github.com/ipdr/ipdr/docker"
 	ipfs "github.com/ipdr/ipdr/ipfs"
 	netutil "github.com/ipdr/ipdr/netutil"
+	platformutil "github.com/ipdr/ipdr/platformutil"
 	server "github.com/ipdr/ipdr/server"
 	log "github.com/sirupsen/logrus"
 )
@@ -39,6 +40,21 @@ type Config struct {
 	IPFSHost                string
 	IPFSGateway             string
 	Debug                   bool
+}
+
+type FatManifest struct {
+	Manifests []struct {
+		Digest    string `json:"digest"`
+		MediaType string `json:"mediaType"`
+		Platform  struct {
+			Architecture string `json:"architecture"`
+			Os           string `json:"os"`
+			Variant      string `json:"variant"`
+		} `json:"platform,omitempty"`
+		Size int `json:"size"`
+	} `json:"manifests"`
+	MediaType     string `json:"mediaType"`
+	SchemaVersion int    `json:"schemaVersion"`
 }
 
 // NewRegistry returns a new registry client instance
@@ -158,13 +174,72 @@ func (r *Registry) DownloadImage(ipfsHash string) (string, error) {
 	return path, nil
 }
 
+func (r *Registry) imageIsMultiPlatform(ipfsHash string) (string, error) {
+	// ipfs object links bafybeieo4rkyrgdzrafljtcm2holeeumhrl4zprjqibhpaew3cf2t7mtfy
+	manifestListFile := "manifestlist.json"
+
+	refs, err := r.ipfsClient.DagGet(ipfsHash)
+	if err != nil {
+		return "", err
+	}
+	/*
+		if str, ok := data.(string); ok {
+		} else {
+		}
+	*/
+	for _, f := range refs.(map[string]interface{})["Links"].([]interface{}) {
+		if f.(map[string]interface{})["Name"].(string) == manifestListFile {
+			return f.(map[string]interface{})["Hash"].(map[string]interface{})["/"].(string), nil
+		}
+	}
+	return "", nil
+}
+
+// If the image is multi-platform, get the correct CID for the local platform
+func (r *Registry) getHashIfMultiPlatform(ipfsHash string) (string, error) {
+	manifestListIpfsHash, err := r.imageIsMultiPlatform(ipfsHash)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	rd, err := r.ipfsClient.Cat(manifestListIpfsHash)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	defer rd.Close()
+	manifestlistContents, err := ioutil.ReadAll(rd)
+	if err != nil {
+		return "", err
+	}
+
+	var fatManifest FatManifest
+	if err := json.Unmarshal(manifestlistContents, &fatManifest); err != nil {
+		return "", err
+	}
+
+	localOs, localArch, localVariant := platformutil.GetLocalOsArchitectureVariant()
+	for _, manifest := range fatManifest.Manifests {
+		if manifest.Platform.Os == localOs && manifest.Platform.Architecture == localArch && manifest.Platform.Variant == localVariant {
+			return manifest.Digest, nil
+		}
+	}
+
+	return "", errors.New("no matching platform found")
+}
+
 // PullImage pulls the Docker image from IPFS
 func (r *Registry) PullImage(ipfsHash string) (string, error) {
 	r.runServer()
+
+	ipfsHashRightPlatform, err := r.getHashIfMultiPlatform(ipfsHash)
+	if err != nil {
+		log.Fatalln(err)
+	}
+	ipfsHash = ipfsHashRightPlatform
+
 	dockerPullImageID := fmt.Sprintf("%s/%s", r.dockerLocalRegistryHost, ipfsHash)
 
 	r.Debugf("[registry] attempting to pull %s", dockerPullImageID)
-	err := r.dockerClient.PullImage(dockerPullImageID)
+	err = r.dockerClient.PullImage(dockerPullImageID)
 	if err != nil {
 		log.Errorf("[registry] error pulling image %s; %v", dockerPullImageID, err)
 		return "", err

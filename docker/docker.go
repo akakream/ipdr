@@ -50,9 +50,10 @@ func newEnvClient(config *Config) *Client {
 
 // ImageSummary is structure for image summary
 type ImageSummary struct {
-	ID   string
-	Tags []string
-	Size int64
+	ID      string
+	Tags    []string
+	Size    int64
+	Digests []string
 }
 
 // ListImages return list of docker images
@@ -67,9 +68,10 @@ func (c *Client) ListImages() ([]*ImageSummary, error) {
 	var summaries []*ImageSummary
 	for _, image := range images {
 		summaries = append(summaries, &ImageSummary{
-			ID:   image.ID,
-			Tags: image.RepoTags,
-			Size: image.Size,
+			ID:      image.ID,
+			Tags:    image.RepoTags,
+			Size:    image.Size,
+			Digests: image.RepoDigests,
 		})
 	}
 

@@ -151,6 +151,15 @@ func (client *Client) Refs(hash string, recursive bool) (<-chan string, error) {
 	return client.client.Refs(hash, recursive)
 }
 
+// DagGet writes a DAG node from IPFS to out.
+func (client *Client) DagGet(hash string) (interface{}, error) {
+	var refs interface{}
+	if err := client.client.DagGet(hash, &refs); err != nil {
+		return nil, err
+	}
+	return refs, nil
+}
+
 // GatewayURL returns the gateway URL
 func (client *Client) GatewayURL() string {
 	if client.gatewayURL == "" {
