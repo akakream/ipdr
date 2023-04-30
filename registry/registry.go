@@ -42,21 +42,6 @@ type Config struct {
 	Debug                   bool
 }
 
-type FatManifest struct {
-	Manifests []struct {
-		Digest    string `json:"digest"`
-		MediaType string `json:"mediaType"`
-		Platform  struct {
-			Architecture string `json:"architecture"`
-			Os           string `json:"os"`
-			Variant      string `json:"variant"`
-		} `json:"platform,omitempty"`
-		Size int `json:"size"`
-	} `json:"manifests"`
-	MediaType     string `json:"mediaType"`
-	SchemaVersion int    `json:"schemaVersion"`
-}
-
 // NewRegistry returns a new registry client instance
 func NewRegistry(config *Config) *Registry {
 	if config == nil {
@@ -174,67 +159,53 @@ func (r *Registry) DownloadImage(ipfsHash string) (string, error) {
 	return path, nil
 }
 
-func (r *Registry) imageIsMultiPlatform(ipfsHash string) (string, error) {
+// If the image is multi-platform, get the correct CID for the local platform
+func (r *Registry) getHashIfMultiPlatform(ipfsHash string) (bool, string, error) {
 	// ipfs object links bafybeieo4rkyrgdzrafljtcm2holeeumhrl4zprjqibhpaew3cf2t7mtfy
 	manifestListFile := "manifestlist.json"
+	localOsArchVariant, err := platformutil.GetLocalOsArchitectureVariant()
+	if err != nil {
+		return false, "", err
+	}
+	var localPlatformIpfsHash string
+	var manifestFileExists bool
 
 	refs, err := r.ipfsClient.DagGet(ipfsHash)
 	if err != nil {
-		return "", err
+		return false, "", err
 	}
-	/*
-		if str, ok := data.(string); ok {
-		} else {
-		}
-	*/
+
 	for _, f := range refs.(map[string]interface{})["Links"].([]interface{}) {
-		if f.(map[string]interface{})["Name"].(string) == manifestListFile {
-			return f.(map[string]interface{})["Hash"].(map[string]interface{})["/"].(string), nil
+		name, ok := f.(map[string]interface{})["Name"].(string)
+		if !ok {
+			continue
 		}
-	}
-	return "", nil
-}
 
-// If the image is multi-platform, get the correct CID for the local platform
-func (r *Registry) getHashIfMultiPlatform(ipfsHash string) (string, error) {
-	manifestListIpfsHash, err := r.imageIsMultiPlatform(ipfsHash)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	rd, err := r.ipfsClient.Cat(manifestListIpfsHash)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer rd.Close()
-	manifestlistContents, err := ioutil.ReadAll(rd)
-	if err != nil {
-		return "", err
-	}
-
-	var fatManifest FatManifest
-	if err := json.Unmarshal(manifestlistContents, &fatManifest); err != nil {
-		return "", err
-	}
-
-	localOs, localArch, localVariant := platformutil.GetLocalOsArchitectureVariant()
-	for _, manifest := range fatManifest.Manifests {
-		if manifest.Platform.Os == localOs && manifest.Platform.Architecture == localArch && manifest.Platform.Variant == localVariant {
-			return manifest.Digest, nil
+		if name == manifestListFile {
+			manifestFileExists = true
+		} else if name == localOsArchVariant {
+			localPlatformIpfsHash = f.(map[string]interface{})["Hash"].(map[string]interface{})["/"].(string)
 		}
 	}
 
-	return "", errors.New("no matching platform found")
+	if manifestFileExists {
+		return true, localPlatformIpfsHash, nil
+	}
+
+	return false, "", errors.New("no matching platform found")
 }
 
 // PullImage pulls the Docker image from IPFS
 func (r *Registry) PullImage(ipfsHash string) (string, error) {
 	r.runServer()
 
-	ipfsHashRightPlatform, err := r.getHashIfMultiPlatform(ipfsHash)
+	isMultiPlatform, ipfsHashRightPlatform, err := r.getHashIfMultiPlatform(ipfsHash)
 	if err != nil {
 		log.Fatalln(err)
 	}
-	ipfsHash = ipfsHashRightPlatform
+	if isMultiPlatform {
+		ipfsHash = ipfsHashRightPlatform
+	}
 
 	dockerPullImageID := fmt.Sprintf("%s/%s", r.dockerLocalRegistryHost, ipfsHash)
 

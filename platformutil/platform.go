@@ -9,7 +9,7 @@ import (
 Returns the local OS, Architecture and Variant that is
 compatible with Docker supported architectures
 */
-func GetLocalOsArchitectureVariant() (string, string, string) {
+func GetLocalOsArchitectureVariant() (string, error) {
 	architecture := runtime.GOARCH
 	fmt.Println(architecture)
 	operatingSystem := runtime.GOOS
@@ -24,5 +24,5 @@ func GetLocalOsArchitectureVariant() (string, string, string) {
 		fmt.Printf("%s.\n", operatingSystem)
 	}
 
-	return "", "", ""
+	return "linuxamd64", nil
 }
