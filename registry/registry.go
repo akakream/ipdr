@@ -192,7 +192,7 @@ func (r *Registry) getHashIfMultiPlatform(ipfsHash string) (bool, string, error)
 		return true, localPlatformIpfsHash, nil
 	}
 
-	return false, "", errors.New("no matching platform found")
+	return false, "", nil
 }
 
 // PullImage pulls the Docker image from IPFS
