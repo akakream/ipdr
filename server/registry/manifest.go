@@ -20,6 +20,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -60,11 +61,15 @@ func (m *manifests) handle(resp http.ResponseWriter, req *http.Request) *regErro
 	target := elem[len(elem)-1]
 	repo := strings.Join(elem[1:len(elem)-2], "/")
 
+	log.Println("ELEM", elem)
+	log.Println("TARGET: ", target)
+	log.Println("REPO: ", repo)
+
 	if req.Method == "GET" {
 		m.lock.Lock()
 		defer m.lock.Unlock()
 
-		mf, err := m.fetch(repo, target)
+		mf, isFatManifest, err := m.fetch(repo, target)
 		if err != nil {
 			return &regError{
 				Status:  http.StatusNotFound,
@@ -82,12 +87,20 @@ func (m *manifests) handle(resp http.ResponseWriter, req *http.Request) *regErro
 				Message: err.Error(),
 			}
 		}
-		f, _ := image.DecodeManifest(mf.blob)
 
-		for _, d := range f.Digests() {
-			m.registry.cids.Add(repo, d, cid)
+		if isFatManifest {
+			f, _ := image.DecodeFatManifest(mf.blob)
+			_ = f
+			// m.registry.cids.Add(repo, f.GetManifestDigest(), cid)
+		} else {
+			f, _ := image.DecodeManifest(mf.blob)
+
+			for _, d := range f.Digests() {
+				m.registry.cids.Add(repo, d, cid)
+			}
 		}
 
+		log.Println("MF.DIGEST", mf.digest)
 		resp.Header().Set("Docker-Content-Digest", mf.digest)
 		resp.Header().Set("X-Docker-Content-ID", cid)
 		resp.Header().Set("Content-Type", mf.contentType)
@@ -101,7 +114,7 @@ func (m *manifests) handle(resp http.ResponseWriter, req *http.Request) *regErro
 		m.lock.Lock()
 		defer m.lock.Unlock()
 
-		mf, err := m.fetch(repo, target)
+		mf, _, err := m.fetch(repo, target)
 		if err != nil {
 			return &regError{
 				Status:  http.StatusNotFound,
@@ -206,33 +219,36 @@ func (m *manifests) handle(resp http.ResponseWriter, req *http.Request) *regErro
 	}
 }
 
-func (m *manifests) fetch(repo, target string) (*manifest, error) {
+func (m *manifests) fetch(repo, target string) (*manifest, bool, error) {
+	isFatManifest := false
 	if _, ok := m.manifests[repo]; !ok {
 		m.manifests[repo] = map[string]*manifest{}
 	}
 	mf, ok := m.manifests[repo][target]
 	if ok {
-		return mf, nil
+		return mf, isFatManifest, nil
 	}
 
 	cid, err := m.registry.resolveCID(repo, target)
 	if err != nil {
-		return nil, err
+		return nil, isFatManifest, err
 	}
 
-	mf, err = m.getManifest(cid, target)
+	mf, isFatManifest, err = m.getManifest(cid, target)
 	if err != nil {
-		return nil, err
+		return nil, isFatManifest, err
 	}
 
-	m.manifests[repo][target] = mf
-	m.manifests[repo][mf.digest] = mf
+	if !isFatManifest {
+		m.manifests[repo][target] = mf
+		m.manifests[repo][mf.digest] = mf
+	}
 
 	// conform to the distribution registry specification
 	// in case target is tag, we need to resolve also by hash.
 	m.registry.cids.Add(repo, mf.digest, cid)
 
-	return mf, nil
+	return mf, isFatManifest, nil
 }
 
 func computeDigest(b []byte) string {
@@ -241,19 +257,40 @@ func computeDigest(b []byte) string {
 	return d
 }
 
-func (m *manifests) getManifest(cid, target string) (*manifest, error) {
+func (m *manifests) getManifest(cid, target string) (*manifest, bool, error) {
+	isFatManifest := false
+	var fmf *image.FatManifest
 	b, err := getContent(m.registry.config.IPFSGateway, cid, []string{"manifests", target})
 	if err != nil {
-		return nil, err
+		return nil, isFatManifest, err
 	}
+
 	mf, err := image.DecodeManifest(b)
 	if err != nil {
-		return nil, err
+		return nil, isFatManifest, err
 	}
+
+	// If config does not exist, it is either faulty or fat manifest
+	if mf.Config == nil {
+		isFatManifest = true
+		fmf, err = image.DecodeFatManifest(b)
+		if err != nil {
+			return nil, isFatManifest, err
+		}
+	}
+
 	digest := computeDigest(b)
-	return &manifest{
-		blob:        b,
-		contentType: mf.MediaType,
-		digest:      digest,
-	}, nil
+	if isFatManifest {
+		return &manifest{
+			blob:        b,
+			contentType: fmf.MediaType,
+			digest:      digest,
+		}, isFatManifest, nil
+	} else {
+		return &manifest{
+			blob:        b,
+			contentType: mf.MediaType,
+			digest:      digest,
+		}, isFatManifest, nil
+	}
 }

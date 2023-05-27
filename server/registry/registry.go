@@ -129,7 +129,7 @@ func (r *registry) dig(resp http.ResponseWriter, req *http.Request) {
 		if short {
 			fmt.Fprintln(resp, cid)
 		} else {
-			mf, err := r.manifests.getManifest(cid, tag)
+			mf, _, err := r.manifests.getManifest(cid, tag)
 			if err == nil {
 				fmt.Fprintln(resp, string(mf.blob))
 			}
@@ -177,6 +177,9 @@ func (r *registry) resolveCID(repo, reference string) (string, error) {
 
 func (r *registry) resolve(repo, reference string) []string {
 	r.log.Printf("resolving CID: %s:%s", repo, reference)
+
+	log.Println("REPO", repo)
+	log.Println("REFERENCE", reference)
 
 	// local/cached
 	if cid, ok := r.cids.Get(repo, reference); ok {

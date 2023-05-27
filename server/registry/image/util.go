@@ -11,3 +11,11 @@ func DecodeManifest(b []byte) (*Manifest, error) {
 	}
 	return &m, nil
 }
+
+func DecodeFatManifest(b []byte) (*FatManifest, error) {
+	var m FatManifest
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}

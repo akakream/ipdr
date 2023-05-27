@@ -387,8 +387,3 @@ _Many thanks to [@qiangli](https://github.com/qiangli) and all the [contributors
 Released under the [MIT](./LICENSE) license.
 
 © [Miguel Mota](https://github.com/miguelmota)
-
-## PROBLEMS SEEN BY AKAKREAM
-
-- Multiple manifest files are created: latest, sha256:..., tagOfTheImage
-  - pushed busybox:386 --> same manifest file created under 3 different name: 386, latest, sha256:...

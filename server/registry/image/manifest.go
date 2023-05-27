@@ -48,3 +48,42 @@ func (r *Manifest) Digests() []string {
 	}
 	return digests
 }
+
+const FatManifestVersion = 2
+const FatManifestType = "application/vnd.docker.distribution.manifest.list.v2+json"
+
+type FatManifest struct {
+	SchemaVersion int               `json:"schemaVersion"`
+	MediaType     string            `json:"mediaType"`
+	Manifests     []*ManifestConfig `json:"manifests"`
+}
+
+type ManifestConfig struct {
+	Digest    string `json:"digest"`
+	MediaType string `json:"mediaType"`
+	Platform  struct {
+		Architecture string `json:"architecture"`
+		Os           string `json:"os"`
+		Variant      string `json:"variant"`
+	} `json:"platform,omitempty"`
+	Size int `json:"size"`
+}
+
+/*
+func (r *FatManifest) GetManifestDigest() string {
+	// localOsArchVariant, err := GetLocalOsArchitectureVariant()
+	// if err != nil {
+	// 	localOsArchVariant = "linuxamd64"
+	// }
+	localOsArchVariant := "linuxamd64"
+
+	digest := ""
+	for _, m := range r.Manifests {
+		if localOsArchVariant == fmt.Sprint(m.Platform.Os, m.Platform.Architecture, m.Platform.Variant) {
+			digest = m.Digest
+			break
+		}
+	}
+	return digest
+}
+*/
