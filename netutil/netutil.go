@@ -13,7 +13,7 @@ import (
 // https://golang.org/pkg/net/http/#pkg-examples
 // Clients and Transports are safe for concurrent use by multiple goroutines.
 var defaultClient = &http.Client{
-	Timeout:   time.Second * 10,
+	Timeout:   time.Second * 600,
 	Transport: defaultTransport,
 }
 
