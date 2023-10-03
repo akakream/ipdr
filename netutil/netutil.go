@@ -21,15 +21,15 @@ var defaultClient = &http.Client{
 var defaultTransport = &http.Transport{
 	Proxy: http.ProxyFromEnvironment,
 	DialContext: (&net.Dialer{
-		Timeout:   10 * time.Second,
-		KeepAlive: 10 * time.Second,
+		Timeout:   60 * time.Second,
+		KeepAlive: 60 * time.Second,
 		DualStack: true,
 	}).DialContext,
 	ForceAttemptHTTP2:     true,
-	MaxIdleConns:          10,
-	IdleConnTimeout:       10 * time.Second,
-	TLSHandshakeTimeout:   10 * time.Second,
-	ExpectContinueTimeout: 1 * time.Second,
+	MaxIdleConns:          60,
+	IdleConnTimeout:       60 * time.Second,
+	TLSHandshakeTimeout:   60 * time.Second,
+	ExpectContinueTimeout: 6 * time.Second,
 }
 
 // Get issues a GET to the specified URL - a drop-in replacement for http.Get with timeouts.
